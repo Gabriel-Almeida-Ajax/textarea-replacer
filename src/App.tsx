@@ -1,41 +1,64 @@
-import { useState } from "react";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useMemo, useState } from "react";
 import "./App.css";
-import { TextArea } from "./components/TextArea";
+
+import { useForm, Controller } from "react-hook-form";
+import { Modal } from "antd";
+import { TextAreaComponent } from "./components/TextArea";
 
 function App() {
-  const [count, setCount] = useState("S20230811");
-  const [numPlaca, setPlaca] = useState("3");
-  const [template, setTemplate] = useState(
-    "<p>teste template, ${numCount} com ${numPlaca} em sua via.</p>"
-  );
+  const { register, control, watch } = useForm({
+    defaultValues: useMemo(
+      () => ({
+        numProcesso: "S20230811",
+        numPlaca: "3",
+        texto:
+          "<p>teste <b>template</b>, ${numProcesso} com ${numPlaca} em sua via.</p>"
+      }),
+      []
+    )
+  });
 
-  const object = {
-    numCount: count,
-    numPlaca
-  };
+  const object2Replace = watch();
+
+  const listInputs = [
+    {
+      name: "numProcesso"
+    },
+    {
+      name: "numPlaca"
+    }
+  ];
+  const [open, setOpen] = useState(false);
+  const openReport = (call: any) => () => call(true);
+  const closeReport = (call: any) => () => call(false);
 
   return (
     <>
       <div className="card">
-        <input
-          type="text"
-          value={count}
-          onChange={(e) => setCount(e.target.value)}
-        />
-        <input
-          type="text"
-          value={numPlaca}
-          onChange={(e) => setPlaca(e.target.value)}
-        />
-        <div className="card">
-          <TextArea
-            replacer={object}
-            template={template}
-            handler={setTemplate}
-          />
-        </div>
+        <button onClick={openReport(setOpen)}> Abrir Relariorio </button>
+
+        <Modal
+          open={open}
+          onOk={closeReport(setOpen)}
+          onCancel={closeReport(setOpen)}
+        >
+          {listInputs.map(({ name }: any) => (
+            <input type="text" {...register(name)} />
+          ))}
+
+          <div className="card">
+            <Controller
+              name="texto"
+              control={control}
+              render={({ field }) => (
+                <TextAreaComponent replacer={object2Replace} {...field} />
+              )}
+            />
+          </div>
+        </Modal>
+        <pre>{object2Replace.texto}</pre>
       </div>
-      <pre>{template}</pre>
     </>
   );
 }

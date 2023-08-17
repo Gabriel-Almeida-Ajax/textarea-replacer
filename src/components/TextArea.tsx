@@ -1,19 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import ReactQuill from "react-quill";
-import debounce from "lodash.debounce";
 import "react-quill/dist/quill.snow.css";
 
 type TextAreaProps = {
   replacer: { [key: string]: any };
-  template: string;
-  handler?: (text: string) => void;
+  value: string;
+  onChange?: (text: string) => void;
 };
 
 function replaceByObject(
-  template: TextAreaProps["template"] = "",
+  template: TextAreaProps["value"] = "",
   replacer: TextAreaProps["replacer"] = {}
-): [any[], string] {
+): [ReplacersProps, string] {
   let str = String(template);
   const replaced: any = {};
 
@@ -22,7 +21,7 @@ function replaceByObject(
     const index = template.indexOf(field);
 
     if (index !== -1) {
-      replaced[key] = { index, value: replacer[key], field };
+      replaced[key] = { index, value: replacer[key] ?? "", field };
     }
     str = str.replace(field, replacer[key]);
   });
@@ -30,12 +29,14 @@ function replaceByObject(
   return [replaced, str];
 }
 
+type ReplacedItem = {
+  field: string;
+  index: number;
+  value: string | number;
+};
+
 type ReplacersProps = {
-  [key: string]: {
-    field: string;
-    index: number;
-    value: string | number;
-  };
+  [key: string]: ReplacedItem;
 };
 
 function getRange(text: string, ini: number, fim?: number): string {
@@ -50,35 +51,64 @@ function reverceByReplace(text: string, replacers: ReplacersProps): string {
     template =
       getRange(template, 0, index) +
       field +
-      getRange(template, index + value.toString().length);
+      getRange(template, index + String(value).length);
   });
 
   return template;
 }
 
-export function TextArea({ replacer, template, handler }: TextAreaProps) {
+const replaceBold = (text = "") =>
+  String(text).replace(/<b>/g, "<strong>").replace(/<\/b>/g, "</strong>");
+
+export function TextAreaComponent({ replacer, value, onChange }: TextAreaProps) {
   const [text, setText] = useState("");
-  const [replaceds, setReplaceds] = useState({});
+  const [replaceds, setReplaceds] = useState<ReplacersProps>({});
+
+  value = replaceBold(value);
 
   useEffect(() => {
-    const [replaced, text] = replaceByObject(template, replacer);
+    const [replaced, text] = replaceByObject(value, replacer);
     setReplaceds(replaced);
     setText(text);
-  }, [replacer, template]);
+  }, [replacer, value]);
 
   const commitChanges = useCallback(
-    (text: string) => {
-      handler && handler(reverceByReplace(text, replaceds));
+    (_text: string) => {
+      const replaced = replaceBold(reverceByReplace(_text, replaceds));
+      const lastItem: ReplacedItem = Object.keys(replaceds).reduce(
+        (acc: any, crt: any) => {
+          if (replaceds[crt].index > acc.index) return replaceds[crt];
+          else return acc;
+        },
+        { index: 0 }
+      );
+      if (
+        !value
+          .trim()
+          .includes(
+            getRange(replaced, 0, lastItem.index + lastItem.field.length + 1).trim()
+          )
+      ) {
+        alert("Não é possível alterar o texto antes dos campos de variáveis.")
+        setText(text);
+        if (onChange) onChange(replaceBold(reverceByReplace(text, replaceds)));
+        return;
+      }
+
+      setText(_text);
+      if (onChange) onChange(replaceBold(reverceByReplace(_text, replaceds)));
     },
-    [handler, replaceds]
+    [onChange, replaceds, text, value]
   );
+
+  const quillRef = useRef();
 
   return (
     <div>
       <ReactQuill
+        ref={quillRef.current}
         value={text}
-        onChange={debounce(commitChanges, 1500)}
-        onBlur={() => commitChanges(text)}
+        onChange={commitChanges}
       />
     </div>
   );
